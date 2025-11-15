@@ -26,5 +26,18 @@
          ],
       }
     },
+    {
+      "description": "Flash Patch Partition",
+      "short_name": "TFM_DP_FLASH",
+   "manifest": "${APPLICATION_SOURCE_DIR}/dp_flash/tfm_manifest_dp_flash.yaml",      "output_path": "${TFM_BINARY_DIR}/dp_flash",
+      "tfm_partition_ipc": true,
+      "version_major": 0,
+      "version_minor": 1,
+      "linker_pattern": {
+        "library_list": [
+          "*tfm_*partition_dp_flash.*"
+        ]
+      }
+    }
   ]
 }

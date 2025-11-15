@@ -14,10 +14,22 @@ configure_file(
   ${CMAKE_CURRENT_BINARY_DIR}/dummy_partition/tfm_manifest_list.yaml
 )
 
+configure_file(
+  ${CMAKE_CURRENT_LIST_DIR}/dp_flash/tfm_manifest_dp_flash.yaml
+  ${CMAKE_CURRENT_BINARY_DIR}/dp_flash/tfm_manifest_dp_flash.yaml
+)
+
+
+# set_property(TARGET zephyr_property_target
+#  APPEND PROPERTY TFM_CMAKE_OPTIONS
+#  -DTFM_EXTRA_MANIFEST_LIST_FILES=${CMAKE_CURRENT_BINARY_DIR}/dummy_partition/tfm_manifest_list.yaml
+#  -DTFM_EXTRA_PARTITION_PATHS=${CMAKE_CURRENT_LIST_DIR}/dummy_partition
+# )
+
 set_property(TARGET zephyr_property_target
   APPEND PROPERTY TFM_CMAKE_OPTIONS
-  -DTFM_EXTRA_MANIFEST_LIST_FILES=${CMAKE_CURRENT_BINARY_DIR}/dummy_partition/tfm_manifest_list.yaml
-  -DTFM_EXTRA_PARTITION_PATHS=${CMAKE_CURRENT_LIST_DIR}/dummy_partition
+  -DTFM_EXTRA_MANIFEST_LIST_FILES=${CMAKE_CURRENT_BINARY_DIR}/dummy_partition/tfm_manifest_list.yaml\;${CMAKE_CURRENT_BINARY_DIR}/dp_flash/tfm_manifest_dp_flash.yaml
+  -DTFM_EXTRA_PARTITION_PATHS=${CMAKE_CURRENT_LIST_DIR}/dummy_partition\;${CMAKE_CURRENT_LIST_DIR}/dp_flash
 )
 
 project(tfm_secure_partition)
@@ -25,6 +37,8 @@ project(tfm_secure_partition)
 target_sources(app PRIVATE
   src/main.c
   src/dummy_partition.c
+  src/dp_flash.c
+
 )
 
 target_include_directories(app PRIVATE

@@ -1,0 +1,22 @@
+{
+  "psa_framework_version": 1.1,
+  "name": "TFM_SP_DP_FLASH",
+  "type": "APPLICATION-ROT",
+  "model": "IPC",
+  "priority": "NORMAL",
+  "entry_point": "tfm_dp_flash_req_mngr_init",
+  "stack_size": "0x2000",
+  "services": [
+    {
+      "name": "TFM_DP_FLASH_WRITE",
+      "sid": "0xFFFFF010",
+      "non_secure_clients": true,
+      "connection_based": true,
+      "version": 1,
+      "version_policy": "STRICT"
+    }
+  ],
+  "dependencies": [
+    "TFM_CRYPTO"
+  ]
+}
