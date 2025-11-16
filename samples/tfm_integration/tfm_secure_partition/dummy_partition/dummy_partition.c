@@ -118,7 +118,7 @@ static uint32_t simple_rand(uint32_t *seed)
 }
 
 
-static psa_status_t tfm_dp_linear_hmac_old(size_t digest_size, size_t *p_digest_size,psa_write_callback_t callback, void *handle)
+static psa_status_t tfm_dp_linear_hmac(size_t digest_size, size_t *p_digest_size,psa_write_callback_t callback, void *handle)
  {
 	uint8_t digest[SHA256_DIGEST_SIZE];
 	hmac_sha256 hmac;
@@ -150,7 +150,7 @@ static psa_status_t tfm_dp_linear_hmac_old(size_t digest_size, size_t *p_digest_
 }
 
 /* Linear HMAC - Sequential block processing */
-static psa_status_t tfm_dp_linear_hmac(size_t digest_size, size_t *p_digest_size,
+static psa_status_t tfm_dp_linear_hmac_old(size_t digest_size, size_t *p_digest_size,
 	psa_write_callback_t callback, void *handle)
 {
 	uint8_t digest[32];
