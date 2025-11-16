@@ -11,6 +11,7 @@
 
 #include "psa/service.h"
 #include "psa_manifest/tfm_dummy_partition.h"
+#include "../crypto/hmac-sha256/hmac-sha256.h"
 #define NUM_SECRETS 5
 
 
@@ -32,6 +33,8 @@ struct dp_secret secrets[NUM_SECRETS] = {
 
 typedef void (*psa_write_callback_t)(void *handle, uint8_t *digest,
 				     uint32_t digest_size);
+
+
 
 static psa_status_t tfm_dp_secret_digest(uint32_t secret_index,
 			size_t digest_size, size_t *p_digest_size,
@@ -114,6 +117,38 @@ static uint32_t simple_rand(uint32_t *seed)
 	return (*seed / 65536) % 32768;
 }
 
+
+static psa_status_t tfm_dp_linear_hmac_old(size_t digest_size, size_t *p_digest_size,psa_write_callback_t callback, void *handle)
+ {
+	uint8_t digest[SHA256_DIGEST_SIZE];
+	hmac_sha256 hmac;
+
+	if (digest_size != SHA256_DIGEST_SIZE) {
+		return PSA_ERROR_INVALID_ARGUMENT;
+	}
+
+	/* Initialize HMAC with your key */
+	hmac_sha256_initialize(&hmac,
+			       attestation_key,
+			       strlen((const char *)attestation_key));
+
+	/* Process memory (sequential, like your FreeRTOS version) */
+	/* If you want the same semantics as your example: single big update */
+	hmac_sha256_update(&hmac,
+			   (const uint8_t *)attestation_memory,
+			   TOTAL_SIZE);
+
+	/* Finalize and get digest */
+	hmac_sha256_finalize(&hmac, NULL, 0);
+	memcpy(digest, hmac.digest, SHA256_DIGEST_SIZE);
+
+	*p_digest_size = SHA256_DIGEST_SIZE;
+	callback(handle, digest, *p_digest_size);
+
+	return PSA_SUCCESS;
+ 
+}
+
 /* Linear HMAC - Sequential block processing */
 static psa_status_t tfm_dp_linear_hmac(size_t digest_size, size_t *p_digest_size,
 	psa_write_callback_t callback, void *handle)
@@ -124,19 +159,19 @@ static psa_status_t tfm_dp_linear_hmac(size_t digest_size, size_t *p_digest_size
 	psa_key_id_t key_id;
 	psa_status_t status;
 
-if (digest_size != sizeof(digest)) {
-	return PSA_ERROR_INVALID_ARGUMENT;
-}
+	if (digest_size != sizeof(digest)) {
+		return PSA_ERROR_INVALID_ARGUMENT;
+	}
 
 // __disable_irq();
 
 
 /* Fill memory with test pattern */
-for (int i = 0; i < TOTAL_SIZE; i++) {
-	attestation_memory[i] = i & 0xFF;
-}
+// for (int i = 0; i < TOTAL_SIZE; i++) {
+// 	attestation_memory[i] = i & 0xFF;
+// }
 
-psa_set_key_usage_flags(&attributes, PSA_KEY_USAGE_SIGN_MESSAGE);
+	psa_set_key_usage_flags(&attributes, PSA_KEY_USAGE_SIGN_MESSAGE);
 	psa_set_key_algorithm(&attributes, PSA_ALG_HMAC(PSA_ALG_SHA_256));
 	psa_set_key_type(&attributes, PSA_KEY_TYPE_HMAC);
 	psa_set_key_bits(&attributes, sizeof(attestation_key) * 8);

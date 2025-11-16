@@ -11,7 +11,7 @@
 #include "psa/client.h"
 #include "psa_manifest/sid.h"
 
-//Benstart
+//Benstart 
 psa_status_t dp_linear_hmac(void *p_digest, size_t digest_size)
 {
 	psa_status_t status;

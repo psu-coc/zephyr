@@ -20,6 +20,7 @@ target_include_directories(tfm_partitions
 target_sources(tfm_app_rot_partition_dp
     PRIVATE
         dummy_partition.c
+        ${CMAKE_CURRENT_LIST_DIR}/../crypto/hmac-sha256/hmac-sha256.c
 )
 
 # The generated sources
