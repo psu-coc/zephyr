@@ -32,6 +32,7 @@ project(tfm_secure_partition)
 target_sources(app PRIVATE
   src/main.c
   src/dummy_partition.c
+  
 
 )
 

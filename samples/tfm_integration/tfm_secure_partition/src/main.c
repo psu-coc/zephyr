@@ -44,7 +44,7 @@ void linear_attestation(void)
 		// __disable_irq();
 
 		//__disable_irq();
-		unsigned int key = irq_lock();
+		// unsigned int key = irq_lock();
 		
 
 		status = dp_linear_hmac(digest, sizeof(digest));
@@ -52,7 +52,7 @@ void linear_attestation(void)
 		// k_msleep(1000);
 
 		//__disable_irq();
-		irq_unlock(key);
+		// irq_unlock(key);
 
 		cycles_after = timing_counter_get();
 		systick_after = k_uptime_ticks();
