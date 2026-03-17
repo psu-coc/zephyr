@@ -25,10 +25,14 @@ project(smarm_experiment)
 target_sources(app PRIVATE
   src/main.c
   src/smarm_partition.c
+  crypto/aes/aes.c
+  crypto/hmac-sha256/hmac-sha256.c
 )
 
 target_include_directories(app PRIVATE
   $<TARGET_PROPERTY:tfm,TFM_BINARY_DIR>/api_ns/interface/include
+  ${CMAKE_CURRENT_LIST_DIR}/crypto/aes
+  ${CMAKE_CURRENT_LIST_DIR}/crypto/hmac-sha256
 )
 
 target_compile_definitions(app

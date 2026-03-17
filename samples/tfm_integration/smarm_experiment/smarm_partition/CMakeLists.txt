@@ -21,6 +21,7 @@ target_sources(tfm_app_rot_partition_smarm
     PRIVATE
         smarm_partition.c
         ${CMAKE_CURRENT_LIST_DIR}/../crypto/hmac-sha256/hmac-sha256.c
+        ${CMAKE_CURRENT_LIST_DIR}/../crypto/aes/aes.c
 )
 
 # The generated sources

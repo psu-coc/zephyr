@@ -6,13 +6,15 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <string.h>
 #include "psa/service.h"
 #include "psa_manifest/tfm_smarm_partition.h"
 #include "../crypto/hmac-sha256/hmac-sha256.h"
+#include "../crypto/aes/aes.h"
 
 /* Configuration - hardcoded as requested */
 /* Start with smaller size for testing, can increase later */
-#define BLOCK_SIZE 64
+#define BLOCK_SIZE 4096
 #define TOTAL_SIZE 0x80000  /* 512KB - match your FreeRTOS version */
 #define BLOCKS (TOTAL_SIZE / BLOCK_SIZE)
 #define SHA256_DIGEST_SIZE 32
@@ -38,8 +40,99 @@ static uint32_t simple_rand(uint32_t *seed)
 	return (*seed / 65536) % 32768;
 }
 
-/* Secure Shuffled HMAC - Main function */
+
+// Aes -ctr pattern
+typedef struct {
+    struct AES_ctx ctx;
+    uint8_t iv[16];
+    uint8_t buffer[16];
+    int pos;
+} aes_ctr_prng_t;
+
+static void aes_ctr_init(aes_ctr_prng_t *prng, const uint8_t key16[16], const uint8_t iv16[16]) {
+    AES_init_ctx_iv(&prng->ctx, key16, iv16);
+    memcpy(prng->iv, iv16, 16);
+    prng->pos = 16; // บังคับให้สร้าง keystream ใหม่ในครั้งแรก
+}
+
+static uint32_t aes_ctr_next_u32(aes_ctr_prng_t *prng) {
+    if (prng->pos >= 16) {
+        memset(prng->buffer, 0, 16); // ใช้ 0 XOR กับ keystream เพื่อดึงค่าสุ่มออกมา
+        AES_CTR_xcrypt_buffer(&prng->ctx, prng->buffer, 16);
+        prng->pos = 0;
+    }
+    uint32_t val;
+    memcpy(&val, &prng->buffer[prng->pos], 4);
+    prng->pos += 4;
+    return val;
+}
+
+static uint32_t prng_uniform_u32(aes_ctr_prng_t *prng, uint32_t n) {
+    const uint32_t lim = 0xFFFFFFFFu - (0xFFFFFFFFu % n);
+    for (;;) {
+        uint32_t r = aes_ctr_next_u32(prng);
+        if (r < lim) return r % n;
+    }
+}
+
 static psa_status_t tfm_smarm_shuffled_hmac_secure(const uint8_t *challenge, size_t challenge_len,
+	size_t digest_size, size_t *p_digest_size,
+	psa_write_callback_t callback, void *handle)
+{
+
+		__disable_irq(); 
+		uint8_t digest[SHA256_DIGEST_SIZE];
+		hmac_sha256 hmac;
+		static int indices[BLOCKS];
+		aes_ctr_prng_t prng;
+		uint8_t aes_key[16] = {0};
+		uint8_t aes_iv[16] = {0};
+
+		if (digest_size != SHA256_DIGEST_SIZE) return PSA_ERROR_INVALID_ARGUMENT;
+
+		/* เตรียม Key และ IV จาก Challenge (ให้เหมือนฝั่ง FreeRTOS) */
+		if (challenge && challenge_len >= 16) {
+		memcpy(aes_key, challenge, 16);
+		}
+
+/* Initialize indices */
+		for (int i = 0; i < BLOCKS; i++) indices[i] = i;
+
+		/* --- ใช้ AES-CTR Shuffle แทน Simple Rand --- */
+		aes_ctr_init(&prng, aes_key, aes_iv);
+		for (int i = BLOCKS - 1; i > 0; i--) {
+			uint32_t j = prng_uniform_u32(&prng, i + 1);
+			int tmp = indices[i];
+			indices[i] = indices[j];
+			indices[j] = tmp;
+		}
+
+/* --- HMAC Loop --- */
+		hmac_sha256_initialize(&hmac, key, sizeof(key) - 1);
+
+		for (int i = 0; i < BLOCKS; i++) {
+			const uint8_t *blk = &real_memory[(size_t)indices[i] * BLOCK_SIZE];
+
+		
+			// unsigned int key = irq_lock();
+			// __disable_irq(); // ปิด IRQ ก่อนเข้าสู่จุดวิกฤต
+			hmac_sha256_update(&hmac, blk, BLOCK_SIZE);
+			// __enable_irq();  // เปิด IRQ ให้ Task อื่นแทรกได้
+			// irq_unlock(key);
+		}
+
+		hmac_sha256_finalize(&hmac, NULL, 0);
+		memcpy(digest, hmac.digest, SHA256_DIGEST_SIZE);
+
+		// irq_lock(key_temp);
+		__enable_irq();
+		*p_digest_size = SHA256_DIGEST_SIZE;
+		callback(handle, digest, *p_digest_size);
+		return PSA_SUCCESS;
+}
+
+/* Secure Shuffled HMAC - Main function */
+static psa_status_t tfm_smarm_shuffled_hmac_secure_old(const uint8_t *challenge, size_t challenge_len,
                                                     size_t digest_size, size_t *p_digest_size,
                                                     psa_write_callback_t callback, void *handle)
 {
@@ -87,9 +180,9 @@ static psa_status_t tfm_smarm_shuffled_hmac_secure(const uint8_t *challenge, siz
 		
 		/* RT-SMARM: Disable IRQ, process block, then enable IRQ */
 		/* This matches your FreeRTOS implementation exactly */
-		// __disable_irq();
+		__disable_irq();
 		hmac_sha256_update(&hmac, blk, BLOCK_SIZE);
-		// __enable_irq();
+		__enable_irq();
 	}
 
 	/* Finalize HMAC */
