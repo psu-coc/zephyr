@@ -14,7 +14,7 @@
 
 /* Configuration - hardcoded as requested */
 /* Start with smaller size for testing, can increase later */
-#define BLOCK_SIZE 4096
+#define BLOCK_SIZE 64
 #define TOTAL_SIZE 0x80000  /* 512KB - match your FreeRTOS version */
 #define BLOCKS (TOTAL_SIZE / BLOCK_SIZE)
 #define SHA256_DIGEST_SIZE 32
@@ -80,7 +80,6 @@ static psa_status_t tfm_smarm_shuffled_hmac_secure(const uint8_t *challenge, siz
 	psa_write_callback_t callback, void *handle)
 {
 
-		__disable_irq(); 
 		uint8_t digest[SHA256_DIGEST_SIZE];
 		hmac_sha256 hmac;
 		static int indices[BLOCKS];
@@ -115,9 +114,9 @@ static psa_status_t tfm_smarm_shuffled_hmac_secure(const uint8_t *challenge, siz
 
 		
 			// unsigned int key = irq_lock();
-			// __disable_irq(); // ปิด IRQ ก่อนเข้าสู่จุดวิกฤต
+			__disable_irq(); // ปิด IRQ ก่อนเข้าสู่จุดวิกฤต
 			hmac_sha256_update(&hmac, blk, BLOCK_SIZE);
-			// __enable_irq();  // เปิด IRQ ให้ Task อื่นแทรกได้
+			__enable_irq();  // เปิด IRQ ให้ Task อื่นแทรกได้
 			// irq_unlock(key);
 		}
 
@@ -125,7 +124,6 @@ static psa_status_t tfm_smarm_shuffled_hmac_secure(const uint8_t *challenge, siz
 		memcpy(digest, hmac.digest, SHA256_DIGEST_SIZE);
 
 		// irq_lock(key_temp);
-		__enable_irq();
 		*p_digest_size = SHA256_DIGEST_SIZE;
 		callback(handle, digest, *p_digest_size);
 		return PSA_SUCCESS;

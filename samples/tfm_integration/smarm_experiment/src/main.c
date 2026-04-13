@@ -21,11 +21,12 @@
 
 // t_disabled
 #define BLOCK_SIZE 4096
-#define TOTAL_SIZE 0x20000  /* 512KB */
+#define TOTAL_SIZE 0x80000/* 512KB 0x20000*/
 #define BLOCKS (TOTAL_SIZE / BLOCK_SIZE)
 #define SHA256_DIGEST_SIZE 32
 
-uint8_t *real_memory = (uint8_t *)0x20000000;
+// uint8_t *real_memory = (uint8_t *)0x20000000;
+uint8_t *real_memory = (uint8_t *)0x08000000;
 
 /* HMAC key */
 static const uint8_t key[] = "MySecureKey123";
@@ -306,41 +307,10 @@ void normal_task_entry(void *p1, void *p2, void *p3)
 	ARG_UNUSED(p2);
 	ARG_UNUSED(p3);
 
-	// k_timer_start(&normal_task_timer, K_MSEC(1), K_MSEC(1));
+	const uint32_t period_ms = 1000 / TARGET_FREQ_HZ;
+	k_timer_start(&normal_task_timer, K_MSEC(period_ms), K_MSEC(period_ms));
 
-
-	const uint32_t period_ms = 1000 / TARGET_FREQ_HZ; /* 1ms for 1000Hz */
-	// k_timer_start(&normal_task_timer, K_MSEC(period_ms), K_MSEC(period_ms));
-
-	uint32_t loop_counter = 0;
-
-	// printk("NormalTask started (running at %d Hz)\r\n", TARGET_FREQ_HZ);
-	uint64_t next_tick = k_uptime_get();
-	for (;;) {
-		/* Control timing - sleep for period */
-		// k_msleep(1);
-		// k_busy_wait(100);
-
-		// next_tick += 1;
-		// k_sleep(K_TIMEOUT_ABS_MS(next_tick));
-		g_normal_counter++; /* Count cycles */
-		// loop_counter++;
-
-		// k_yield();
-
-		// k_busy_wait(10);
-
-		/* Print status every second */
-		// if (loop_counter >= TARGET_FREQ_HZ) {
-		// 	if (k_mutex_lock(&uart_mutex, K_MSEC(10)) == 0) {
-		// 		// printk("NormalTask: %u cycles in 1s\r\n", g_normal_counter);
-		// 		k_mutex_unlock(&uart_mutex);
-		// 	}
-		// 	loop_counter = 0;
-		// }
-    //    k_sleep(K_FOREVER);
-		k_msleep(period_ms);
-	}
+	k_sleep(K_FOREVER);
 }
 
 /* Thread B: ExperimentTask - calls Secure Service using PSA APIs */
@@ -357,7 +327,9 @@ void experiment_task_entry(void *p1, void *p2, void *p3)
     psa_status_t status = PSA_SUCCESS;  /* Initialize status */
 
 	printk("ExperimentTask started\r\n");
-	k_msleep(2000); 
+	k_msleep(2000);
+
+	k_msleep(500); /* let timer run a few cycles before starting rounds */
 
 	/* Run 5 test rounds */
 	for (int round = 1; round <= 10; round++) {
@@ -367,68 +339,32 @@ void experiment_task_entry(void *p1, void *p2, void *p3)
 			uint32_t rnd = seed ^ (seed << 13) ^ (k * 0x5DEECE66D);
 			memcpy(&challenge[k * 4], &rnd, 4);
 		}
-		uint32_t start_realtime = k_cycle_get_32();
-		uint32_t start_systick = k_uptime_get_32();
+		uint32_t start_cycle = k_cycle_get_32();
 		uint32_t start_count = g_normal_counter;
-		
 
 		/* Call secure function using PSA Client API */
-		// unsigned int key = irq_lock();
+		status = smarm_shuffled_hmac_secure(challenge, sizeof(challenge), digest,
+						    sizeof(digest));
 
-		// k_msleep(1000);
-		// k_busy_wait(1000);
-		// irq_unlock(key);
-		// status = PSA_SUCCESS;  /* Add this line for now */
-		// __disable_irq();
-		status = smarm_shuffled_hmac_secure(challenge, sizeof(challenge),digest, sizeof(digest));
-		// __enable_irq();
-
-
-		// int result = smarm_shuffled_hmac_normal(challenge, sizeof(challenge), 
-                                                //  digest, &status);
-
-
-		uint32_t end_realtime = k_cycle_get_32();
-		uint32_t end_systick = k_uptime_get_32();
-	
+		uint32_t end_cycle = k_cycle_get_32();
 		uint32_t end_count = g_normal_counter;
 
+		uint32_t cpu_hz = sys_clock_hw_cycles_per_sec();
+
+		/* Wall-clock duration from hardware cycle counter (not affected by NS timer starvation) */
+		uint32_t duration_ms = (uint32_t)(((uint64_t)(end_cycle - start_cycle) * 1000ULL) /
+						  cpu_hz);
+
+		/* NormalTask ticks that should have fired in that wall time */
+		uint32_t expected_run = (duration_ms * TARGET_FREQ_HZ) / 1000;
+
+		/* NormalTask ticks that actually fired (k_timer may be delayed during TF-M) */
+		uint32_t actual_run = end_count - start_count;
+
 		if (status == PSA_SUCCESS) {
-			uint32_t cycles_diff = end_realtime - start_realtime;
-			uint32_t cpu_freq_hz = sys_clock_hw_cycles_per_sec();
-			uint32_t duration_realtime_ms = ((uint64_t)cycles_diff * 1000) / cpu_freq_hz;
-			uint32_t duration_systick_ms = end_systick - start_systick;
-			uint32_t actual_run = end_count - start_count;
-
-			// uint32_t duration_ms = end_systick - start_systick;
-	
-
-			/* In experiment_task_entry, after secure call: */
-			uint32_t expected_enabled_time_ms = duration_realtime_ms;  // Rough estimate
-			uint32_t expected_counts = (expected_enabled_time_ms * TARGET_FREQ_HZ) / 1000;
-
-		
-			// uint32_t expected_run = duration_ms; /* 1000Hz = 1 cycle/ms */
-			// uint32_t expected_run = (duration_realtime_ms * TARGET_FREQ_HZ) / 1000;
-			// int32_t missed_cycles = (int32_t)expected_run - (int32_t)actual_run;
-			// printk("Round %d:\r\n", round);
-
 			if (k_mutex_lock(&uart_mutex, K_MSEC(10)) == 0) {
-				printk("Round %d: %u \r\n", round,actual_run);
-				// printk("Round %d: %u \r\n", round,result);
-				
-				// printk("CPU Freq: %u Hz\r\n", cpu_freq_hz);
-				// printk("Cycles (Realtime): %u cycles\r\n", cycles_diff);
-				// printk("Duration (Realtime): %u ms  <-- Real elapsed time (IRQ independent)\r\n", duration_realtime_ms);
-				// printk("NormalTask Run: %u counts  <-- Stops when IRQ disabled\r\n", actual_run);
-				// printk("Expected Run (if IRQ enabled): %u counts\r\n", 
-					//    (duration_realtime_ms * TARGET_FREQ_HZ) / 1000);
-				
-				// printk("Experiement Run : %u / %u / %u\r\n", duration_realtime_ms, cycles_diff, actual_run);
-				// printk("Result %u :  %u\r\n", 
-				// 	 expected_counts, actual_run);
-				// printk("\r\n");
-				// printk("Duration (Systick): %u ms\r\n", duration_systick_ms);
+				printk("Round %d: actual=%u expected=%u dur=%u ms\r\n",
+				       round, actual_run, expected_run, duration_ms);
 				k_mutex_unlock(&uart_mutex);
 			}
 		} else {
