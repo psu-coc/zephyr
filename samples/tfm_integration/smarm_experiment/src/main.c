@@ -15,7 +15,7 @@
 
 
 /* Configuration */
-#define TARGET_FREQ_HZ 1000  /* NormalTask frequency (Hz) */
+#define TARGET_FREQ_HZ 10  /* NormalTask frequency (Hz) */
 #define NORMAL_TASK_STACK_SIZE 4096
 #define EXPERIMENT_TASK_STACK_SIZE 2048
 
